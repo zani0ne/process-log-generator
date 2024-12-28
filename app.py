@@ -4,6 +4,7 @@ from io import BytesIO
 import random
 from datetime import datetime, timedelta
 import lib
+from lib import visualize_variant_flow
 import xml.etree.ElementTree as ET
 
 # App Title
