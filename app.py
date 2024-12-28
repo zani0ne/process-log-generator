@@ -3,7 +3,8 @@ import pandas as pd
 from io import BytesIO
 import random
 from datetime import datetime, timedelta
-from lib import visualize_variant_flow
+import lib
+import xml.etree.ElementTree as ET
 
 # App Title
 st.title("Business Process Event Log Generator")
@@ -21,6 +22,30 @@ st.header("Step 2: Define Process Activities")
 
 if 'activities' not in st.session_state:
     st.session_state.activities = []
+
+# BPMN File Upload
+uploaded_file = st.file_uploader("Upload BPMN Diagram (.bpmn)", type=['bpmn'])
+
+# Extract BPMN Activities and Populate
+if uploaded_file:
+    st.success("BPMN Diagram Uploaded Successfully!")
+    
+    # Extract activities from the uploaded BPMN file
+    extracted_activities = lib.extract_activities_from_bpmn(uploaded_file)
+    
+    # Append extracted tasks to session state (only if not already added)
+    if extracted_activities:
+        existing_tasks = [a['name'] for a in st.session_state.activities]
+        for act in extracted_activities:
+            if act['name'] not in existing_tasks:
+                st.session_state.activities.append(act)
+        st.rerun()
+    else:
+        # Fix: Check session state for extracted tasks instead of assuming no tasks
+        if st.session_state.activities:
+            st.success("Tasks successfully extracted!")
+        else:
+            st.warning("No tasks found in the uploaded BPMN file.")
 
 def add_activity():
     st.session_state.activities.append({
