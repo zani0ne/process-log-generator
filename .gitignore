@@ -1,0 +1,27 @@
+# Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+*.env
+
+# Jupyter Notebooks and Data
+.ipynb_checkpoints
+*.csv
+*.db
+*.sqlite3
+*.log
+
+# VS Code and System Files
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Streamlit
+secrets.toml
