@@ -21,32 +21,17 @@ st.write("---")  # Separator
 # Step 2: Define Activities
 st.header("Step 2: Define Process Activities")
 
+DEFAULT_ACTIVITIES = [
+    {"name": "Order Received", "resource": "Sales", "min_time": 120, "max_time": 300, "concurrent": False, "pool": "Customer", "lane": "Order Management"},
+    {"name": "Verify Stock", "resource": "Inventory", "min_time": 60, "max_time": 180, "concurrent": False, "pool": "Warehouse", "lane": "Stock Verification"},
+    {"name": "Process Payment", "resource": "Finance", "min_time": 120, "max_time": 360, "concurrent": False, "pool": "Finance", "lane": "Payments"},
+    {"name": "Ship Order", "resource": "Logistics", "min_time": 180, "max_time": 420, "concurrent": False, "pool": "Warehouse", "lane": "Shipping"},
+    {"name": "Send Confirmation", "resource": "Customer Service", "min_time": 60, "max_time": 120, "concurrent": False, "pool": "Customer", "lane": "Communication"}
+]
+
+# Initialize Session State with Hardcoded Activities
 if 'activities' not in st.session_state:
-    st.session_state.activities = []
-
-# BPMN File Upload
-uploaded_file = st.file_uploader("Upload BPMN Diagram (.bpmn)", type=['bpmn'])
-
-# Extract BPMN Activities and Populate
-if uploaded_file:
-    st.success("BPMN Diagram Uploaded Successfully!")
-    
-    # Extract activities from the uploaded BPMN file
-    extracted_activities = lib.extract_activities_from_bpmn(uploaded_file)
-    
-    # Append extracted tasks to session state (only if not already added)
-    if extracted_activities:
-        existing_tasks = [a['name'] for a in st.session_state.activities]
-        for act in extracted_activities:
-            if act['name'] not in existing_tasks:
-                st.session_state.activities.append(act)
-        st.rerun()
-    else:
-        # Fix: Check session state for extracted tasks instead of assuming no tasks
-        if st.session_state.activities:
-            st.success("Tasks successfully extracted!")
-        else:
-            st.warning("No tasks found in the uploaded BPMN file.")
+    st.session_state.activities = DEFAULT_ACTIVITIES.copy()
 
 def add_activity():
     st.session_state.activities.append({
@@ -54,7 +39,9 @@ def add_activity():
         "resource": "", 
         "min_time": 1,
         "max_time": 5,
-        "concurrent": False
+        "concurrent": False,
+        "pool": "",
+        "lane": ""
     })
 
 st.button("Add Activity", on_click=add_activity)
@@ -63,15 +50,42 @@ st.button("Add Activity", on_click=add_activity)
 for i, activity in enumerate(st.session_state.activities):
     with st.expander(f"Activity {i + 1}: {activity['name'] or 'Unnamed'}"):
         # Activity Name and Resource
-        activity['name'] = st.text_input(
-            "Activity Name", 
-            value=activity['name'], 
+        updated_name = st.text_input(
+            "Activity Name",
+            value=activity['name'],
             key=f"name_{i}"
         )
+
+        # Sync name change across all variants
+        if updated_name != activity['name']:
+            old_name = activity['name']
+            st.session_state.activities[i]['name'] = updated_name
+
+            # Update all variants referencing this activity
+            for variant in st.session_state.variants:
+                variant['activities'] = [
+                    updated_name if act == old_name else act for act in variant['activities']
+                ]
+            
+            st.rerun()
+
         activity['resource'] = st.text_input(
             "Resource", 
             value=activity['resource'], 
             key=f"resource_{i}"
+        )
+
+        # Pool and Lane Inputs
+        col3, col4 = st.columns(2)
+        activity['pool'] = col3.text_input(
+            "Pool", 
+            value=activity['pool'], 
+            key=f"pool_{i}"
+        )
+        activity['lane'] = col4.text_input(
+            "Lane", 
+            value=activity['lane'], 
+            key=f"lane_{i}"
         )
         
         #Directly Update Session State for Min and Max Time Inputs
@@ -84,13 +98,13 @@ for i, activity in enumerate(st.session_state.activities):
         # Time Input for Min and Max Duration (Real-time Update)
         col1, col2 = st.columns(2)
         activity['min_time'] = col1.number_input(
-            "Min Time (minutes)", 
+            "Min Time (seconds)", 
             min_value=1, 
             value=st.session_state[f"min_time_{i}"], 
             key=f"min_time_{i}"
         )
         activity['max_time'] = col2.number_input(
-            "Max Time (minutes)", 
+            "Max Time (seconds)", 
             min_value=1, 
             value=st.session_state[f"max_time_{i}"], 
             key=f"max_time_{i}"
@@ -111,6 +125,7 @@ for i, activity in enumerate(st.session_state.activities):
         if st.button(f"Delete Activity {i + 1}", key=f"delete_{i}"):
             del st.session_state.activities[i]
             st.experimental_rerun()  # Rerun to reflect deletion immediately
+
 # --- Validation for Unique Activity Names ---
 activity_names = [a['name'] for a in st.session_state.activities]
 
@@ -120,8 +135,43 @@ if len(activity_names) != len(set(activity_names)):
 # Step 3: Define Process Variants with BPMN Diagram
 st.header("Step 3: Define Process Flow Variants")
 
+DEFAULT_VARIANTS = [
+    {
+        "name": "Standard Order Flow",
+        "activities": ["Order Received", "Verify Stock", "Process Payment", "Ship Order", "Send Confirmation"],
+        "frequency": 60,
+        "times": {
+            "Order Received": {"min": 120, "max": 300},
+            "Verify Stock": {"min": 60, "max": 180},
+            "Process Payment": {"min": 120, "max": 360},
+            "Ship Order": {"min": 180, "max": 420},
+            "Send Confirmation": {"min": 60, "max": 120}
+        }
+    },
+    {
+        "name": "Express Order Flow",
+        "activities": ["Order Received", "Process Payment", "Send Confirmation"],
+        "frequency": 30,
+        "times": {
+            "Order Received": {"min": 60, "max": 180},
+            "Process Payment": {"min": 120, "max": 240},
+            "Send Confirmation": {"min": 60, "max": 60}
+        }
+    },
+    {
+        "name": "Warehouse Restock",
+        "activities": ["Verify Stock", "Ship Order"],
+        "frequency": 10,
+        "times": {
+            "Verify Stock": {"min": 120, "max": 240},
+            "Ship Order": {"min": 300, "max": 480}
+        }
+    }
+]
+
+# Initialize Session State with Hardcoded Variants
 if 'variants' not in st.session_state:
-    st.session_state.variants = []
+    st.session_state.variants = DEFAULT_VARIANTS.copy()
 
 def add_variant():
     default_times = {
@@ -132,7 +182,7 @@ def add_variant():
         "name": "",
         "activities": [],
         "frequency": 0,
-        "times": default_times  # <-- This ensures "times" exists for new variants
+        "times": default_times
     })
 
 st.button("Add Variant", on_click=add_variant)
@@ -142,33 +192,39 @@ total_frequency = 0
 
 for v_index, variant in enumerate(st.session_state.variants):
     with st.expander(f"Variant {v_index + 1}: {variant['name'] or 'Unnamed'}"):
-        variant['name'] = st.text_input(
+        updated_name = st.text_input(
             f"Variant Name {v_index + 1}",
+            value=variant['name'],
             key=f"variant_name_{v_index}"
         )
+        if updated_name != variant['name']:
+            st.session_state.variants[v_index]['name'] = updated_name
+            st.rerun()
 
-        # Frequency Input
-        variant['frequency'] = st.number_input(
+        # --- Update Frequency ---
+        updated_frequency = st.number_input(
             f"Frequency (%) for Variant {v_index + 1}",
             min_value=0,
             max_value=100,
             value=variant['frequency'],
             key=f"freq_{v_index}"
         )
-        total_frequency += variant['frequency']
+        if updated_frequency != variant['frequency']:
+            st.session_state.variants[v_index]['frequency'] = updated_frequency
 
-        # Activity Selection (Fix for Missing Defaults)
+        # --- Update Selected Activities ---
         selected_activities = st.multiselect(
             f"Select Activities for Variant {v_index + 1}",
-            options=[a['name'] for a in st.session_state.activities],  # Get available activity names
+            options=[a['name'] for a in st.session_state.activities],
             default=[
                 act for act in variant['activities'] if act in [a['name'] for a in st.session_state.activities]
-            ],  # Filter out missing activities
+            ],
             key=f"select_activities_{v_index}"
         )
-        variant['activities'] = selected_activities
+        if selected_activities != variant['activities']:
+            st.session_state.variants[v_index]['activities'] = selected_activities
 
-        # Adjust Activity Times (Per Variant)
+        # --- Adjust Time Ranges (Optional Per Variant) ---
         if selected_activities:
             adjust_times_toggle = st.toggle(
                 f"Adjust Time Ranges for Variant {v_index + 1}",
@@ -177,39 +233,37 @@ for v_index, variant in enumerate(st.session_state.variants):
             
             if adjust_times_toggle:
                 for act in selected_activities:
-                    activity_defaults = next(
-                        (a for a in st.session_state.activities if a['name'] == act), {}
-                    )
-                    min_time_key = f"min_time_variant_{v_index}_{act}"
-                    max_time_key = f"max_time_variant_{v_index}_{act}"
-
                     col1, col2 = st.columns(2)
                     act_min = col1.number_input(
-                        f"{act} - Min Time (minutes)",
+                        f"{act} - Min Time (seoconds)",
                         min_value=1,
-                        value=activity_defaults.get('min_time', 1),
-                        key=min_time_key
+                        value=variant['times'].get(act, {}).get('min', 1),
+                        key=f"min_time_variant_{v_index}_{act}"
                     )
                     act_max = col2.number_input(
-                        f"{act} - Max Time (minutes)",
+                        f"{act} - Max Time (seconds)",
                         min_value=1,
-                        value=activity_defaults.get('max_time', 5),
-                        key=max_time_key
+                        value=variant['times'].get(act, {}).get('max', 5),
+                        key=f"max_time_variant_{v_index}_{act}"
                     )
-                    if 'times' not in variant:
-                        variant['times'] = {}
-                    variant['times'][act] = {'min': act_min, 'max': act_max}
 
+                    # Sync time adjustments directly to session state
+                    if act_min != variant['times'][act]['min'] or act_max != variant['times'][act]['max']:
+                        st.session_state.variants[v_index]['times'][act] = {'min': act_min, 'max': act_max}
 
-        # Visualize the Flow of Activities for this Variant
+        # --- Visualize the Flow of Activities for this Variant ---
         if selected_activities:
             st.subheader("Process Flow Visualization")
             st.graphviz_chart(visualize_variant_flow(variant['name'], selected_activities))
 
-        # Delete Variant Button
+        # --- Delete Variant Button ---
         if st.button(f"Delete Variant {v_index + 1}", key=f"delete_variant_{v_index}"):
             del st.session_state.variants[v_index]
-            st.experimental_rerun()
+            st.rerun()
+
+# --- Recalculate Total Frequency AFTER Inputs ---
+for variant in st.session_state.variants:
+    total_frequency += variant['frequency']
 
 # Frequency Validation Feedback
 st.write(f"**Total Frequency: {total_frequency}%**")
@@ -224,8 +278,8 @@ start_date = st.date_input("Select Start Date", value=datetime.today())
 end_date = st.date_input("Select End Date", value=datetime.today() + timedelta(days=7))
 
 # Case Start Gap Inputs
-min_case_gap = st.number_input("Minimum Gap Between Cases (minutes)", min_value=0, value=10)
-max_case_gap = st.number_input("Maximum Gap Between Cases (minutes)", min_value=30, value=60)
+min_case_gap = st.number_input("Minimum Gap Between Cases (seconds)", min_value=0, value=600)
+max_case_gap = st.number_input("Maximum Gap Between Cases (seconds)", min_value=900, value=1800)
 
 if st.button("Generate Event Log"):
     if not st.session_state.activities or not st.session_state.variants:
@@ -236,6 +290,10 @@ if st.button("Generate Event Log"):
         event_log = []
         total_cases = num_cases
         variant_pool = []
+        log_id = 1
+
+        case_prefix = "ORD-"
+        event_prefix = "LOG-"
 
         for variant in st.session_state.variants:
             variant_pool.extend([variant] * int(variant['frequency']))
@@ -248,66 +306,61 @@ if st.button("Generate Event Log"):
             # Case start time with optional random gap
             if last_case_end_time:
                 gap = random.randint(min_case_gap, max_case_gap)
-                case_start_time = last_case_end_time + timedelta(minutes=gap)
+                case_start_time = last_case_end_time + timedelta(seconds=gap)
             else:
                 case_start_time = datetime.combine(
                     random.choice(pd.date_range(start_date, end_date)),
                     datetime.min.time()
-                ) + timedelta(hours=random.randint(8, 16))
+                ) + timedelta(hours=random.randint(8, 16)) # 8 AM - 4 PM
 
             start_time = case_start_time
             first_activity_time = start_time
             last_activity_time = start_time
             
             for act in variant['activities']:
+                activity_info = next((a for a in st.session_state.activities if a['name'] == act), {})
+
                 if act not in variant['times']:
-                    default_act = next((a for a in st.session_state.activities if a['name'] == act), {})
                     variant['times'][act] = {
-                        'min': default_act.get('min_time', 1),
-                        'max': default_act.get('max_time', 5)
+                        'min': activity_info.get('min_time', 60),
+                        'max': activity_info.get('max_time', 300)
                     }
 
                 act_time_range = variant['times'].get(act, {})
-                min_time = act_time_range.get('min', 1)
-                max_time = act_time_range.get('max', 5)
+                min_time = act_time_range.get('min', 60)
+                max_time = act_time_range.get('max', 300)
 
                 # Check if activity allows concurrency
-                concurrent = any(
-                    a['name'] == act and a['concurrent'] 
-                    for a in st.session_state.activities
-                )
+                concurrent = activity_info.get('concurrent', False)
 
-                if concurrent:
-                    duration = 0  # Same timestamp for concurrent activities
-                else:
-                    duration = random.randint(min_time, max_time)
+                duration = 0 if concurrent else random.randint(min_time, max_time)
                 
+                # --- Calculate Duration (with Jitter) ---
+                base_duration = random.randint(min_time, max_time)
+                jitter = random.randint(-30, 30)
+                duration = max(1, base_duration + jitter) 
+
                 event_log.append({
-                    'Case ID': f"Case_{case_id}",
+                    'ID': f"{event_prefix}{log_id}",
+                    'Case ID': f"{case_prefix}{case_id}",
                     'Activity': act,
-                    'Resource': [a['resource'] for a in st.session_state.activities if a['name'] == act][0],
+                    'Resource': activity_info.get('resource', 'Unknown'),
                     'Timestamp': start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    'Variant': variant['name']
+                    'Pool': activity_info.get('pool', 'N/A'),
+                    'Lane': activity_info.get('lane', 'N/A')
                 })
+                log_id += 1
 
                 # Increment start time for non-concurrent activities
                 if not concurrent:
                     last_activity_time = start_time
-                    start_time += timedelta(minutes=duration)
+                    start_time += timedelta(seconds=duration)
             
-            # Calculate Cycle Time
-            last_activity_duration = random.randint(min_time, max_time)
-            last_activity_time += timedelta(minutes=last_activity_duration)
-
-            cycle_time = (last_activity_time - first_activity_time).total_seconds() / 60
-            event_log[-len(variant['activities'])]['Cycle Time'] = round(cycle_time, 2)
-
             # Store end time for next case gap
             last_case_end_time = last_activity_time
         
         # Convert to DataFrame
         df = pd.DataFrame(event_log)
-        df['Cycle Time'] = df['Cycle Time'].fillna('')
 
         # Export to Excel
         output = BytesIO()
