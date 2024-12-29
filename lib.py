@@ -1,5 +1,6 @@
 import graphviz
 import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 
 MAX_DEPTH = 15
 visited_processes = set()
