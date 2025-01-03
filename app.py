@@ -7,13 +7,27 @@ import lib
 from lib import visualize_variant_flow
 import xml.etree.ElementTree as ET
 
+ROUTE_DISTRIBUTION = {
+    1: 5,  # Failed stock check
+    2: 6,  # Fraud cancel
+    3: 6,  # Payment loop fails once
+    4: 8,  # Successful fraud check, Paid
+    5: 6,  # Successful fraud check, not paid
+    6: 8,  # Credit check prepayment, paid
+    7: 6,  # Credit check prepayment, not paid
+    8: 10, # Any payment successful
+    9: 5   # Any payment not successful
+}
+TOTAL_CASES = sum(ROUTE_DISTRIBUTION.values())
+
 # App Title
 st.title("Business Process Event Log Generator")
 
 # Step 1: Basic Process Details
 st.header("Step 1: Process Setup")
 process_name = st.text_input("Process Name (Optional)")
-num_cases = st.number_input("Number of Cases to Simulate", min_value=1, value=10)
+num_cases = TOTAL_CASES
+st.write(f"Total Cases to Simulate: **{TOTAL_CASES}** (Distributed across routes)")
 file_name = st.text_input("Event Log File Name", value="event_log.xlsx")
 
 st.write("---")  # Separator
@@ -22,12 +36,32 @@ st.write("---")  # Separator
 st.header("Step 2: Define Process Activities")
 
 DEFAULT_ACTIVITIES = [
-    {"name": "Order Received", "resource": "Sales", "min_time": 120, "max_time": 300, "concurrent": False, "pool": "Customer", "lane": "Order Management"},
-    {"name": "Verify Stock", "resource": "Inventory", "min_time": 60, "max_time": 180, "concurrent": False, "pool": "Warehouse", "lane": "Stock Verification"},
-    {"name": "Process Payment", "resource": "Finance", "min_time": 120, "max_time": 360, "concurrent": False, "pool": "Finance", "lane": "Payments"},
-    {"name": "Ship Order", "resource": "Logistics", "min_time": 180, "max_time": 420, "concurrent": False, "pool": "Warehouse", "lane": "Shipping"},
-    {"name": "Send Confirmation", "resource": "Customer Service", "min_time": 60, "max_time": 120, "concurrent": False, "pool": "Customer", "lane": "Communication"}
+    {"name": "Order request notification", "min_time": 1, "max_time": 1, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create order request", "min_time": 1, "max_time": 5, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Check stock levels", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Update inventory levels", "min_time": 5, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Check total price of order", "min_time": 1, "max_time": 2, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Check the order for fraud", "min_time": 2, "max_time": 12, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Notify customer that order is cancelled due to fraud", "min_time": 1, "max_time": 5, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Set order to pre-paid condition", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Provide payment instructions to customer", "min_time": 3, "max_time": 15, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Mark the order as paid", "min_time": 5, "max_time": 900, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Label order as approved", "min_time": 2, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create order confirmation and send it to customer", "min_time": 10, "max_time": 60, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create shipment contract for the right distributor", "min_time": 5, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create collective shipment order and send to TM", "min_time": 1800, "max_time": 1800, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Check Order Legitimacy", "min_time": 2, "max_time": 10, "concurrent": False, "pool": "TM", "lane": "TM"},
+    {"name": "Inform systems about failed legitimacy check", "min_time": 1, "max_time": 10, "concurrent": False, "pool": "TM", "lane": "TM"},
+    {"name": "Send information to distributor", "min_time": 5, "max_time": 40, "concurrent": False, "pool": "TM", "lane": "TM"},
+    {"name": "Receive and process shipping confirmation from distributor", "min_time": 3600, "max_time": 127800, "concurrent": False, "pool": "TM", "lane": "TM"},
+    {"name": "Transmit shipping confirmation to Customer", "min_time": 10, "max_time": 60, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Inform customer about order cancellation", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create customer order", "min_time": 25, "max_time": 300, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Perfom customer credit check", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Cancel order and notify costumer", "min_time": 1, "max_time": 4, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Enable customer to choose any payment method", "min_time": 3, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"}
 ]
+
 
 # Initialize Session State with Hardcoded Activities
 if 'activities' not in st.session_state:
@@ -41,11 +75,12 @@ def add_activity():
         "max_time": 5,
         "concurrent": False,
         "pool": "",
-        "lane": ""
+        "lane": "",
+        "anomaly_possible": False
     })
 
 st.button("Add Activity", on_click=add_activity)
-    
+
 # Display Activity Inputs in Expanders
 for i, activity in enumerate(st.session_state.activities):
     with st.expander(f"Activity {i + 1}: {activity['name'] or 'Unnamed'}"):
@@ -66,14 +101,7 @@ for i, activity in enumerate(st.session_state.activities):
                 variant['activities'] = [
                     updated_name if act == old_name else act for act in variant['activities']
                 ]
-            
             st.rerun()
-
-        activity['resource'] = st.text_input(
-            "Resource", 
-            value=activity['resource'], 
-            key=f"resource_{i}"
-        )
 
         # Pool and Lane Inputs
         col3, col4 = st.columns(2)
@@ -137,41 +165,221 @@ st.header("Step 3: Define Process Flow Variants")
 
 DEFAULT_VARIANTS = [
     {
-        "name": "Standard Order Flow",
-        "activities": ["Order Received", "Verify Stock", "Process Payment", "Ship Order", "Send Confirmation"],
-        "frequency": 60,
+        "name": "Route 1: Failed Stock Availability Check",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Inform customer about order cancellation"
+        ],
+        "frequency": 0,
         "times": {
-            "Order Received": {"min": 120, "max": 300},
-            "Verify Stock": {"min": 60, "max": 180},
-            "Process Payment": {"min": 120, "max": 360},
-            "Ship Order": {"min": 180, "max": 420},
-            "Send Confirmation": {"min": 60, "max": 120}
         }
     },
     {
-        "name": "Express Order Flow",
-        "activities": ["Order Received", "Process Payment", "Send Confirmation"],
-        "frequency": 30,
+        "name": "Route 2: Fraud Cancel",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Notify customer that order is cancelled due to fraud"
+        ],
+        "frequency": 0,
         "times": {
-            "Order Received": {"min": 60, "max": 180},
-            "Process Payment": {"min": 120, "max": 240},
-            "Send Confirmation": {"min": 60, "max": 60}
         }
     },
     {
-        "name": "Warehouse Restock",
-        "activities": ["Verify Stock", "Ship Order"],
-        "frequency": 10,
+        "name": "Route 3: Any Payment Successful (but loop failed once)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Inform systems about failed legitimacy check",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
         "times": {
-            "Verify Stock": {"min": 120, "max": 240},
-            "Ship Order": {"min": 300, "max": 480}
         }
-    }
+    },
+    {
+        "name": "Route 4: Successful Fraud Check, Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 5: Successful Fraud Check, Not Paid (Canceled)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 6: Credit Check Prepayment, Successfully Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 7: Credit Check Prepayment, Canceled/Not Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perform customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 8: Any Payment Successful (Straightforward)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 9: Any Payment Not Successful",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perform customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
 ]
 
 # Initialize Session State with Hardcoded Variants
 if 'variants' not in st.session_state:
     st.session_state.variants = DEFAULT_VARIANTS.copy()
+
+# Normalize the frequencies to ensure they sum to 100%
+normalized_frequencies = []
+total_sum = 0
+
+for i, variant in enumerate(st.session_state.variants):
+    route_number = i + 1  # Route numbers 1-9
+    raw_frequency = ROUTE_DISTRIBUTION.get(route_number, 0)
+    frequency = (raw_frequency / TOTAL_CASES) * 100
+    rounded_frequency = round(frequency, 10)  # Limit to avoid floating-point issues
+    normalized_frequencies.append(rounded_frequency)
+    total_sum += rounded_frequency
+
+# Adjust for rounding error
+rounding_error = 100 - total_sum
+if rounding_error != 0:
+    normalized_frequencies[-1] += rounding_error  # Adjust last variant to balance to 100%
+
+# Assign the corrected frequencies back
+for i, variant in enumerate(st.session_state.variants):
+    variant['frequency'] = normalized_frequencies[i]
 
 def add_variant():
     default_times = {
@@ -191,9 +399,9 @@ st.button("Add Variant", on_click=add_variant)
 total_frequency = 0
 
 for v_index, variant in enumerate(st.session_state.variants):
-    with st.expander(f"Variant {v_index + 1}: {variant['name'] or 'Unnamed'}"):
+    with st.expander(f"{variant['name'] or 'Unnamed'}"):
         updated_name = st.text_input(
-            f"Variant Name {v_index + 1}",
+            "Variant Name",
             value=variant['name'],
             key=f"variant_name_{v_index}"
         )
@@ -201,16 +409,8 @@ for v_index, variant in enumerate(st.session_state.variants):
             st.session_state.variants[v_index]['name'] = updated_name
             st.rerun()
 
-        # --- Update Frequency ---
-        updated_frequency = st.number_input(
-            f"Frequency (%) for Variant {v_index + 1}",
-            min_value=0,
-            max_value=100,
-            value=variant['frequency'],
-            key=f"freq_{v_index}"
-        )
-        if updated_frequency != variant['frequency']:
-            st.session_state.variants[v_index]['frequency'] = updated_frequency
+        # Display Frequency as Read-Only (calculated from distribution)
+        st.write(f"**Frequency:** {variant['frequency']}%")
 
         # --- Update Selected Activities ---
         selected_activities = st.multiselect(
@@ -288,22 +488,28 @@ if st.button("Generate Event Log"):
         st.error("End date must be after start date.")
     else:
         event_log = []
-        total_cases = num_cases
+        route_case_counter = {route: 1 for route in range(1, 10)}
         variant_pool = []
-        log_id = 1
 
-        case_prefix = "ORD-"
-        event_prefix = "LOG-"
-
-        for variant in st.session_state.variants:
-            variant_pool.extend([variant] * int(variant['frequency']))
-
+        case_prefix = "R"
         last_case_end_time = None
 
-        for case_id in range(1, total_cases + 1):
-            variant = random.choice(variant_pool)
+        # --- Fill Variant Pool Based on Frequency ---
+        for variant in st.session_state.variants:
+            route_number = int(variant['name'].split(':')[0].split()[-1])  # Extract route number from name
+            variant_pool.extend([variant] * ROUTE_DISTRIBUTION.get(route_number, 0))
 
-            # Case start time with optional random gap
+        # --- Generate Cases for Each Variant ---
+        for case_id in range(1, TOTAL_CASES + 1):
+            variant = random.choice(variant_pool)  # Randomly select a variant from the pool
+            route_number = int(variant['name'].split(':')[0].split()[-1])
+            case_num = route_case_counter[route_number]
+            route_case_counter[route_number] += 1
+
+            # Format Case ID according to route and sequence
+            case_id_formatted = f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
+
+            # Case start time logic
             if last_case_end_time:
                 gap = random.randint(min_case_gap, max_case_gap)
                 case_start_time = last_case_end_time + timedelta(seconds=gap)
@@ -311,15 +517,16 @@ if st.button("Generate Event Log"):
                 case_start_time = datetime.combine(
                     random.choice(pd.date_range(start_date, end_date)),
                     datetime.min.time()
-                ) + timedelta(hours=random.randint(8, 16)) # 8 AM - 4 PM
+                ) + timedelta(hours=random.randint(8, 16))  # Case starts between 8 AM - 4 PM
 
             start_time = case_start_time
-            first_activity_time = start_time
             last_activity_time = start_time
             
+            # --- Generate Activities for the Case ---
             for act in variant['activities']:
                 activity_info = next((a for a in st.session_state.activities if a['name'] == act), {})
 
+                # Default activity timing if not set
                 if act not in variant['times']:
                     variant['times'][act] = {
                         'min': activity_info.get('min_time', 60),
@@ -330,26 +537,23 @@ if st.button("Generate Event Log"):
                 min_time = act_time_range.get('min', 60)
                 max_time = act_time_range.get('max', 300)
 
-                # Check if activity allows concurrency
+                # Determine concurrency behavior
                 concurrent = activity_info.get('concurrent', False)
 
-                duration = 0 if concurrent else random.randint(min_time, max_time)
-                
-                # --- Calculate Duration (with Jitter) ---
+                # Calculate duration with random jitter
                 base_duration = random.randint(min_time, max_time)
-                jitter = random.randint(-30, 30)
+                jitter = random.randint(-4, 4)
                 duration = max(1, base_duration + jitter) 
 
+                # Append event log entry (No ID or Resource needed anymore)
                 event_log.append({
-                    'ID': f"{event_prefix}{log_id}",
-                    'Case ID': f"{case_prefix}{case_id}",
+                    'Case ID': case_id_formatted,
                     'Activity': act,
-                    'Resource': activity_info.get('resource', 'Unknown'),
                     'Timestamp': start_time.strftime("%Y-%m-%d %H:%M:%S"),
                     'Pool': activity_info.get('pool', 'N/A'),
-                    'Lane': activity_info.get('lane', 'N/A')
+                    'Lane': activity_info.get('lane', 'N/A'),
+                    'Route': f"Route {route_number}"
                 })
-                log_id += 1
 
                 # Increment start time for non-concurrent activities
                 if not concurrent:
