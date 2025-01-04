@@ -619,21 +619,38 @@ if st.button("Generate Event Log"):
         case_prefix = "R"
         last_case_end_time = None
 
-        # --- Fill Variant Pool Based on Frequency ---
-        for variant in st.session_state.variants:
-            route_number = int(variant['name'].split(':')[0].split()[-1])  # Extract route number from name
-            variant_pool.extend([variant] * ROUTE_DISTRIBUTION.get(route_number, 0))
+        # --- Fill Variant Pool Based on Exact Distribution ---
+        for route, num_cases in ROUTE_DISTRIBUTION.items():
+            matching_variants = [
+                v for v in st.session_state.variants if f"Route {route}" in v['name']
+            ]
+            error_variants = [
+                v for v in st.session_state.variants if f"Route {route}" in v['name'] and "(Error)" in v['name']
+            ]
+            # Add normal cases based on ROUTE_DISTRIBUTION
+            for variant in matching_variants:
+                variant_pool.extend([variant] * num_cases)
+            
+            # Add only ONE error case if it exists
+            if error_variants:
+                variant_pool.append(random.choice(error_variants))
+        random.shuffle(variant_pool)
 
         # --- Generate Cases for Each Variant ---
-        for case_id in range(1, TOTAL_CASES + 1):
-            variant = random.choice(variant_pool)  # Randomly select a variant from the pool
+        for variant in variant_pool:  # Randomly select a variant from the pool
             route_number = int(variant['name'].split(':')[0].split()[-1])
             case_num = route_case_counter[route_number]
             route_case_counter[route_number] += 1
 
             # Format Case ID according to route and sequence
-            case_id_formatted = f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
-            is_anomaly = "Error" in variant['name']
+            #case_id_formatted = f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
+            is_anomaly = "(Error)" in variant['name']
+
+            # Format Case ID with error marker if anomaly
+            case_id_formatted = (
+                f"{case_prefix}{route_number}_{str(case_num).zfill(2)}E" if is_anomaly
+                else f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
+            )
 
             # Case start time logic
             if last_case_end_time:
