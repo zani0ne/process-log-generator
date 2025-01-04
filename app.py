@@ -6,16 +6,22 @@ from datetime import datetime, timedelta
 import lib
 from lib import visualize_variant_flow
 import xml.etree.ElementTree as ET
+import re
 
 ROUTE_DISTRIBUTION = {
-    1: 5,  # Failed stock check
-    2: 6,  # Fraud cancel
-    3: 6,  # Payment loop fails once
+    1: 4,  # Failed stock check
+    101: 1, # Route 1 (Error) - Rework for stock check
+    2: 5,  # Fraud cancel
+    102: 1, 
+    3: 5,  # Payment loop fails once
+    103: 1,
     4: 8,  # Successful fraud check, Paid
     5: 6,  # Successful fraud check, not paid
     6: 8,  # Credit check prepayment, paid
-    7: 6,  # Credit check prepayment, not paid
-    8: 10, # Any payment successful
+    7: 5,  # Credit check prepayment, not paid
+    107: 1,
+    8: 9, # Any payment successful
+    108: 1,
     9: 5   # Any payment not successful
 }
 TOTAL_CASES = sum(ROUTE_DISTRIBUTION.values())
@@ -36,7 +42,7 @@ st.write("---")  # Separator
 st.header("Step 2: Define Process Activities")
 
 DEFAULT_ACTIVITIES = [
-    {"name": "Order request notification", "min_time": 1, "max_time": 1, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Order request notification", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Create order request", "min_time": 1, "max_time": 5, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Check stock levels", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Update inventory levels", "min_time": 5, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
@@ -47,8 +53,8 @@ DEFAULT_ACTIVITIES = [
     {"name": "Provide payment instructions to customer", "min_time": 3, "max_time": 15, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
     {"name": "Mark the order as paid", "min_time": 5, "max_time": 900, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
     {"name": "Label order as approved", "min_time": 2, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
-    {"name": "Create order confirmation and send it to customer", "min_time": 10, "max_time": 60, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
-    {"name": "Create shipment contract for the right distributor", "min_time": 5, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create order confirmation and send it to customer", "min_time": 10, "max_time": 30, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
+    {"name": "Create shipment contract for the right distributor", "min_time": 5, "max_time": 30, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Create collective shipment order and send to TM", "min_time": 1800, "max_time": 1800, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Check Order Legitimacy", "min_time": 2, "max_time": 10, "concurrent": False, "pool": "TM", "lane": "TM"},
     {"name": "Inform systems about failed legitimacy check", "min_time": 1, "max_time": 10, "concurrent": False, "pool": "TM", "lane": "TM"},
@@ -58,10 +64,9 @@ DEFAULT_ACTIVITIES = [
     {"name": "Inform customer about order cancellation", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Create customer order", "min_time": 25, "max_time": 300, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Perfom customer credit check", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
-    {"name": "Cancel order and notify costumer", "min_time": 1, "max_time": 4, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Cancel order and notify customer", "min_time": 5, "max_time": 15, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
     {"name": "Enable customer to choose any payment method", "min_time": 3, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"}
 ]
-
 
 # Initialize Session State with Hardcoded Activities
 if 'activities' not in st.session_state:
@@ -264,6 +269,7 @@ DEFAULT_VARIANTS = [
         ],
         "frequency": 0,
         "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901}
         }
     },
     {
@@ -308,6 +314,7 @@ DEFAULT_VARIANTS = [
         ],
         "frequency": 0,
         "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901}
         }
     },
     {
@@ -352,6 +359,107 @@ DEFAULT_VARIANTS = [
         ],
         "frequency": 0,
         "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901}
+        }
+    },
+    {
+        "name": "Route 1: (Error) Failed Stock Availability Check",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Check stock levels",  # Rework occurs here
+            "Inform customer about order cancellation"
+        ],
+        "frequency": 0,
+        "times": {}
+    },
+    {
+        "name": "Route 2: (Error) Fraud Cancel",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Notify customer that order is cancelled due to fraud"
+        ],
+        "frequency": 0,
+        "times": {}
+    },
+    {
+        "name": "Route 3: (Error) Any Payment Successful (but loop failed once)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Set order to pre-paid condition",
+            "Mark the order as paid",  # Out of order before instructions
+            "Provide payment instructions to customer",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Inform systems about failed legitimacy check",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {}
+    },
+    {
+        "name": "Route 7: (Error) Credit Check Prepayment, Canceled/Not Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perform customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+            "Provide payment instructions to customer": {"min": 50, "max": 600}
+        }
+    },
+{
+        "name": "Route 8: (Error) Any Payment Successful (Straightforward)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+	    "Receive and process shipping confirmation from distributor"
+        ],
+        "frequency": 0,
+        "times": {
+		    "Mark the order as paid": {"min": 2, "max": 7},
+            "Label order as approved": {"min": -4 , "max": -1}
         }
     },
 ]
@@ -359,6 +467,22 @@ DEFAULT_VARIANTS = [
 # Initialize Session State with Hardcoded Variants
 if 'variants' not in st.session_state:
     st.session_state.variants = DEFAULT_VARIANTS.copy()
+
+# Ensure each variant has times for all activities based on DEFAULT_ACTIVITIES
+for variant in st.session_state.variants:
+    for activity in st.session_state.activities:
+        if activity['name'] not in variant['times']:
+            # If activity doesn't exist at all, set default times
+            variant['times'][activity['name']] = {
+                'min': activity['min_time'],
+                'max': activity['max_time']
+            }
+        else:
+            # If activity exists but min/max are missing, set individually
+            if 'min' not in variant['times'][activity['name']]:
+                variant['times'][activity['name']]['min'] = activity['min_time']
+            if 'max' not in variant['times'][activity['name']]:
+                variant['times'][activity['name']]['max'] = activity['max_time']
 
 # Normalize the frequencies to ensure they sum to 100%
 normalized_frequencies = []
@@ -436,13 +560,13 @@ for v_index, variant in enumerate(st.session_state.variants):
                     col1, col2 = st.columns(2)
                     act_min = col1.number_input(
                         f"{act} - Min Time (seoconds)",
-                        min_value=1,
+                        min_value=None,
                         value=variant['times'].get(act, {}).get('min', 1),
                         key=f"min_time_variant_{v_index}_{act}"
                     )
                     act_max = col2.number_input(
                         f"{act} - Max Time (seconds)",
-                        min_value=1,
+                        min_value=None,
                         value=variant['times'].get(act, {}).get('max', 5),
                         key=f"max_time_variant_{v_index}_{act}"
                     )
@@ -489,6 +613,7 @@ if st.button("Generate Event Log"):
     else:
         event_log = []
         route_case_counter = {route: 1 for route in range(1, 10)}
+        total_cases = sum(ROUTE_DISTRIBUTION.values())
         variant_pool = []
 
         case_prefix = "R"
@@ -508,6 +633,7 @@ if st.button("Generate Event Log"):
 
             # Format Case ID according to route and sequence
             case_id_formatted = f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
+            is_anomaly = "Error" in variant['name']
 
             # Case start time logic
             if last_case_end_time:
@@ -545,6 +671,8 @@ if st.button("Generate Event Log"):
                 jitter = random.randint(-4, 4)
                 duration = max(1, base_duration + jitter) 
 
+                end_time = start_time + timedelta(seconds=duration)
+
                 # Append event log entry (No ID or Resource needed anymore)
                 event_log.append({
                     'Case ID': case_id_formatted,
@@ -552,7 +680,8 @@ if st.button("Generate Event Log"):
                     'Timestamp': start_time.strftime("%Y-%m-%d %H:%M:%S"),
                     'Pool': activity_info.get('pool', 'N/A'),
                     'Lane': activity_info.get('lane', 'N/A'),
-                    'Route': f"Route {route_number}"
+                    'Route': f"Route {route_number}",
+                    'Anomaly': 'Yes' if is_anomaly else 'No'
                 })
 
                 # Increment start time for non-concurrent activities
