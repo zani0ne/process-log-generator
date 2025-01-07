@@ -1,0 +1,295 @@
+DEFAULT_VARIANTS = [
+    {
+        "name": "Route 1: Failed Stock Availability Check",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Inform customer about order cancellation"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 2: Fraud Cancel",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Notify customer that order is cancelled due to fraud"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 3: Any Payment Successful (but loop failed once)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Inform systems about failed legitimacy check",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 4: Successful Fraud Check, Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 5: Successful Fraud Check, Not Paid (Canceled)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901}
+        }
+    },
+    {
+        "name": "Route 6: Credit Check Prepayment, Successfully Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 7: Credit Check Prepayment, Canceled/Not Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perform customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901}
+        }
+    },
+    {
+        "name": "Route 8: Any Payment Successful (Straightforward)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        "name": "Route 9: Any Payment Not Successful",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perform customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901}
+        }
+    },
+    {
+        "name": "Route 1: (Error) Failed Stock Availability Check",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Check stock levels",  # Rework occurs here
+            "Inform customer about order cancellation"
+        ],
+        "frequency": 0,
+        "times": {}
+    },
+    {
+        "name": "Route 2: (Error) Fraud Cancel",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Notify customer that order is cancelled due to fraud"
+        ],
+        "frequency": 0,
+        "times": {}
+    },
+    {
+        "name": "Route 3: (Error) Any Payment Successful (but loop failed once)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Set order to pre-paid condition",
+            "Mark the order as paid",  # Out of order before instructions
+            "Provide payment instructions to customer",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Inform systems about failed legitimacy check",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {}
+    },
+    {
+        "name": "Route 7: (Error) Credit Check Prepayment, Canceled/Not Paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perform customer credit check",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer"
+        ],
+        "frequency": 0,
+        "times": {
+            "Provide payment instructions to customer": {"min": 50, "max": 600}
+        }
+    },
+{
+        "name": "Route 8: (Error) Any Payment Successful (Straightforward)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+	    "Receive and process shipping confirmation from distributor"
+        ],
+        "frequency": 0,
+        "times": {
+		    "Mark the order as paid": {"min": 2, "max": 7},
+            "Label order as approved": {"min": -4 , "max": -1}
+        }
+    },
+]

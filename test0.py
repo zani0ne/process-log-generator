@@ -657,18 +657,28 @@ if st.button("Generate Event Log"):
                 else f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
             )
 
-            # Case start time logic
-            if last_case_end_time:
-                gap = random.randint(min_case_gap, max_case_gap)
-                case_start_time = last_case_end_time + timedelta(seconds=gap)
-            else:
-                case_start_time = datetime.combine(
-                    random.choice(pd.date_range(start_date, end_date)),
-                    datetime.min.time()
-                ) + timedelta(hours=random.randint(8, 16))  # Case starts between 8 AM - 4 PM
+            # Berechne die Differenz zwischen Start- und Enddatum
+            date_diff = (end_date - start_date).days
 
-            start_time = case_start_time
-            last_activity_time = start_time
+            # Berechne die Anzahl der Fälle, die generiert werden sollen
+            total_cases = sum(ROUTE_DISTRIBUTION.values())
+
+            # Berechne den maximalen Zeitraum, der durch die Gaps benötigt wird
+            max_required_gap = (total_cases - 1) * max_case_gap / 86400  # in Tagen (3600 Sekunden * 24 Stunden)
+
+            # Überprüfe, ob der Zeitraum zwischen Start- und Enddatum ausreichend ist
+            if date_diff < max_required_gap:
+                st.error("Der Zeitraum zwischen Start- und Enddatum ist zu kurz, um die gewünschten 'Case Gaps' zu berücksichtigen. Bitte wähle einen längeren Zeitraum.")
+            else:
+                # Jetzt ist sichergestellt, dass der Zeitraum ausreichend ist
+                # Hier wird weiterhin eine zufällige Startzeit für jeden Fall generiert
+                case_start_time = datetime.combine(
+                    random.choice(pd.date_range(start_date, end_date).tolist()),  # Umwandlung in Liste und Auswahl eines zufälligen Datums
+                    datetime.min.time()
+                ) + timedelta(hours=random.randint(8, 10))  # Der Fall beginnt zwischen 8 Uhr und 16 Uhr
+
+                start_time = case_start_time
+                last_activity_time = start_time
             
             # --- Generate Activities for the Case --- 
             bulk_shipment_schedule = {}
