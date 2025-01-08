@@ -59,8 +59,8 @@ DEFAULT_ACTIVITIES = [
     {"name": "Create collective shipment order and send to TM", "min_time": 1800, "max_time": 1800, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Check Order Legitimacy", "min_time": 2, "max_time": 10, "concurrent": False, "pool": "TM", "lane": "TM"},
     {"name": "Inform systems about failed legitimacy check", "min_time": 1, "max_time": 10, "concurrent": False, "pool": "TM", "lane": "TM"},
-    {"name": "Send information to distributor", "min_time": 5, "max_time": 40, "concurrent": False, "pool": "TM", "lane": "TM"},
-    {"name": "Receive and process shipping confirmation from distributor", "min_time": 3600, "max_time": 127800, "concurrent": False, "pool": "TM", "lane": "TM"},
+    {"name": "Send information to distributor", "min_time": 10800, "max_time": 86400, "concurrent": False, "pool": "TM", "lane": "TM"},
+    {"name": "Receive and process shipping confirmation from distributor", "min_time": 60, "max_time": 180, "concurrent": False, "pool": "TM", "lane": "TM"},
     {"name": "Transmit shipping confirmation to Customer", "min_time": 10, "max_time": 60, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Inform customer about order cancellation", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Create customer order", "min_time": 25, "max_time": 300, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
@@ -648,19 +648,26 @@ if st.button("Generate Event Log"):
         next_bulk_shipment_time = None
 
         # --- Fill Variant Pool Based on Exact Distribution ---
+        # --- Fill Variant Pool Based on Exact Distribution ---
         for route, num_cases in ROUTE_DISTRIBUTION.items():
             matching_variants = [
                 v for v in st.session_state.variants if f"Route {route}" in v['name']
             ]
             
-            # Add normal cases based on ROUTE_DISTRIBUTION
+            # Add up to the required number of cases
+            selected_variants = matching_variants[:num_cases]
+            variant_pool.extend(selected_variants)
+            
+            print(f"Route {route}: Adding {len(selected_variants)} variants (Required: {num_cases})")
+
+            if len(matching_variants) > num_cases:
+                print(f"Warning: Route {route} has {len(matching_variants)} cases, trimming to {num_cases}.")
+                matching_variants = matching_variants[:num_cases]
+            
+            # Add cases to pool
             for variant in matching_variants:
                 variant_pool.extend([variant] * num_cases)
                 print(variant['name'], num_cases)
-            # Add only ONE error case if it exists
-            
-
-        random.shuffle(variant_pool)
 
         # --- Generate Cases for Each Variant ---
         for variant in variant_pool:  # Randomly select a variant from the pool
