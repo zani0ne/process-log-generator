@@ -10,21 +10,22 @@ import re
 
 ROUTE_DISTRIBUTION = {
     1: 4,  # Failed stock check
-    101: 1, # Route 1 (Error) - Rework for stock check
     2: 5,  # Fraud cancel
-    102: 1, 
-    3: 5,  # Payment loop fails once
-    103: 1,
+    3: 8,  # Payment loop fails once
     4: 8,  # Successful fraud check, Paid
     5: 6,  # Successful fraud check, not paid
     6: 8,  # Credit check prepayment, paid
-    7: 5,  # Credit check prepayment, not paid
-    107: 1,
+    7: 6,  # Credit check prepayment, not paid
     8: 9, # Any payment successful
-    108: 1,
-    9: 5   # Any payment not successful
+    9: 5,
+    10: 1,
+    11: 3,
+    12: 2,
+    13: 2,
+    14: 3,  # Any payment not successful
 }
 TOTAL_CASES = sum(ROUTE_DISTRIBUTION.values())
+print(TOTAL_CASES)
 
 # App Title
 st.title("Business Process Event Log Generator")
@@ -63,7 +64,7 @@ DEFAULT_ACTIVITIES = [
     {"name": "Transmit shipping confirmation to Customer", "min_time": 10, "max_time": 60, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Inform customer about order cancellation", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
     {"name": "Create customer order", "min_time": 25, "max_time": 300, "concurrent": False, "pool": "Tchibo", "lane": "Sales"},
-    {"name": "Perfom customer credit check", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
+    {"name": "Perform customer credit check", "min_time": 1, "max_time": 3, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
     {"name": "Cancel order and notify customer", "min_time": 5, "max_time": 15, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"},
     {"name": "Enable customer to choose any payment method", "min_time": 3, "max_time": 10, "concurrent": False, "pool": "Tchibo", "lane": "Risk Management"}
 ]
@@ -363,24 +364,15 @@ DEFAULT_VARIANTS = [
         }
     },
     {
-        "name": "Route 1: (Error) Failed Stock Availability Check",
-        "activities": [
-            "Order request notification",
-            "Create order request",
-            "Check stock levels",
-            "Check stock levels",  # Rework occurs here
-            "Inform customer about order cancellation"
-        ],
-        "frequency": 0,
-        "times": {}
-    },
-    {
-        "name": "Route 2: (Error) Fraud Cancel",
+        #Update Inventory levels doppelt vorhanden
+        "name": "Route 10: Update Inventory Levels Duplicated",
         "activities": [
             "Order request notification",
             "Create order request",
             "Check stock levels",
             "Create customer order",
+            "Update inventory levels",
+            "Update inventory levels",
             "Check total price of order",
             "Check the order for fraud",
             "Notify customer that order is cancelled due to fraud"
@@ -389,7 +381,8 @@ DEFAULT_VARIANTS = [
         "times": {}
     },
     {
-        "name": "Route 3: (Error) Any Payment Successful (but loop failed once)",
+        #Mark Order as Paid was skipped
+        "name": "Route 11: Mark Order as Paid Skipped",
         "activities": [
             "Order request notification",
             "Create order request",
@@ -399,7 +392,6 @@ DEFAULT_VARIANTS = [
             "Check total price of order",
             "Perfom customer credit check",
             "Set order to pre-paid condition",
-            "Mark the order as paid",  # Out of order before instructions
             "Provide payment instructions to customer",
             "Label order as approved",
             "Create order confirmation and send it to customer",
@@ -418,25 +410,8 @@ DEFAULT_VARIANTS = [
         "times": {}
     },
     {
-        "name": "Route 7: (Error) Credit Check Prepayment, Canceled/Not Paid",
-        "activities": [
-            "Order request notification",
-            "Create order request",
-            "Update inventory levels",
-            "Create customer order",
-            "Check total price of order",
-            "Perform customer credit check",
-            "Set order to pre-paid condition",
-            "Provide payment instructions to customer",
-            "Cancel order and notify customer"
-        ],
-        "frequency": 0,
-        "times": {
-            "Provide payment instructions to customer": {"min": 50, "max": 600}
-        }
-    },
-{
-        "name": "Route 8: (Error) Any Payment Successful (Straightforward)",
+        #Aktivitäten vertrauscht (Mark the order as paid kommt nach Label order as approved)
+        "name": "Route 12: Activity Order Confusion",
         "activities": [
             "Order request notification",
             "Create order request",
@@ -447,8 +422,8 @@ DEFAULT_VARIANTS = [
             "Perfom customer credit check",
             "Enable customer to choose any payment method",
             "Provide payment instructions to customer",
-            "Mark the order as paid",
             "Label order as approved",
+            "Mark the order as paid",
             "Create order confirmation and send it to customer",
             "Create shipment contract for the right distributor",
             "Create collective shipment order and send to TM",
@@ -458,8 +433,57 @@ DEFAULT_VARIANTS = [
         ],
         "frequency": 0,
         "times": {
-		    "Mark the order as paid": {"min": 2, "max": 7},
-            "Label order as approved": {"min": -4 , "max": -1}
+		    #"Mark the order as paid": {"min": 2, "max": 7},
+            #"Label order as approved": {"min": -4 , "max": -1}
+        }
+    },
+    {
+        #Nach Order paid ist Ende
+        "name": "Route 13: After Order Paid (End)",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Check the order for fraud",
+            "Set order to pre-paid condition",
+            "Provide payment instructions to customer",
+            "Mark the order as paid",
+        ],
+        "frequency": 0,
+        "times": {
+        }
+    },
+    {
+        #Obwohl die Zahlung eingetroffen ist, wurde die Order gecancelt, da sie 1 Sekunde nach 15 Minuten eintraf
+        "name": "Route 14: Cancel order although paid",
+        "activities": [
+            "Order request notification",
+            "Create order request",
+            "Check stock levels",
+            "Update inventory levels",
+            "Create customer order",
+            "Check total price of order",
+            "Perfom customer credit check",
+            "Enable customer to choose any payment method",
+            "Provide payment instructions to customer",
+            "Cancel order and notify customer",
+            "Mark the order as paid",
+            "Label order as approved",
+            "Create order confirmation and send it to customer",
+            "Create shipment contract for the right distributor",
+            "Create collective shipment order and send to TM",
+            "Check Order Legitimacy",
+            "Send information to distributor",
+            "Receive and process shipping confirmation from distributor",
+            "Transmit shipping confirmation to Customer"
+        ],
+        "frequency": 0,
+        "times": {
+            "Provide payment instructions to customer": {"min": 901, "max": 901},
+            "Cancel order and notify customer": {"min": 1, "max": 1}
         }
     },
 ]
@@ -612,7 +636,7 @@ if st.button("Generate Event Log"):
         st.error("End date must be after start date.")
     else:
         event_log = []
-        route_case_counter = {route: 1 for route in range(1, 10)}
+        route_case_counter = {route: 1 for route in ROUTE_DISTRIBUTION.keys()}
         total_cases = sum(ROUTE_DISTRIBUTION.values())
         variant_pool = []
 
@@ -628,16 +652,13 @@ if st.button("Generate Event Log"):
             matching_variants = [
                 v for v in st.session_state.variants if f"Route {route}" in v['name']
             ]
-            error_variants = [
-                v for v in st.session_state.variants if f"Route {route}" in v['name'] and "(Error)" in v['name']
-            ]
+            
             # Add normal cases based on ROUTE_DISTRIBUTION
             for variant in matching_variants:
                 variant_pool.extend([variant] * num_cases)
-            
+                print(variant['name'], num_cases)
             # Add only ONE error case if it exists
-            if error_variants:
-                variant_pool.append(random.choice(error_variants))
+            
 
         random.shuffle(variant_pool)
 
@@ -647,14 +668,8 @@ if st.button("Generate Event Log"):
             case_num = route_case_counter[route_number]
             route_case_counter[route_number] += 1
 
-            # Format Case ID according to route and sequence
-            #case_id_formatted = f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
-            is_anomaly = "(Error)" in variant['name']
-
-            # Format Case ID with error marker if anomaly
             case_id_formatted = (
-                f"{case_prefix}{route_number}_{str(case_num).zfill(2)}E" if is_anomaly
-                else f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
+                f"{case_prefix}{route_number}_{str(case_num).zfill(2)}"
             )
 
             # Berechne die Differenz zwischen Start- und Enddatum
@@ -675,7 +690,7 @@ if st.button("Generate Event Log"):
                 case_start_time = datetime.combine(
                     random.choice(pd.date_range(start_date, end_date).tolist()),  # Umwandlung in Liste und Auswahl eines zufälligen Datums
                     datetime.min.time()
-                ) + timedelta(hours=random.randint(8, 10))  # Der Fall beginnt zwischen 8 Uhr und 16 Uhr
+                ) + timedelta(hours=random.randint(6, 22), minutes=random.randint(1, 59))  # Der Fall beginnt zwischen 8 Uhr und 16 Uhr
 
                 start_time = case_start_time
                 last_activity_time = start_time
@@ -738,8 +753,7 @@ if st.button("Generate Event Log"):
                     'Timestamp': start_time.strftime("%Y-%m-%d %H:%M:%S"),
                     'Pool': activity_info.get('pool', 'N/A'),
                     'Lane': activity_info.get('lane', 'N/A'),
-                    'Route': f"Route {route_number}",
-                    'Anomaly': 'Yes' if is_anomaly else 'No'
+                    'Route': f"Route {route_number}"
                 })
 
                 # Increment time for sequential activities
