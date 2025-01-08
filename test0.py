@@ -812,8 +812,7 @@ if st.button("Generate Event Log"):
                             'Timestamp': start_after_shipment.strftime("%Y-%m-%d %H:%M:%S"),
                             'Pool': activity_info.get('pool', 'N/A'),
                             'Lane': activity_info.get('lane', 'N/A'),
-                            'Route': f"Route {shipment['route']}",
-                            'Anomaly': 'No'
+                            'Route': f"Route {shipment['route']}"
                         })
 
                         start_after_shipment += timedelta(seconds=duration)
